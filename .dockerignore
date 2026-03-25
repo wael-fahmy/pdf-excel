@@ -1,0 +1,7 @@
+input_pdfs/
+output_excel/
+.pdf_cache/
+__pycache__/
+*.pyc
+.git/
+.gitignore
