@@ -1,198 +1,199 @@
 # PDF to Excel Extractor
 
-This project converts one-page PDF image files into a single Excel sheet using OCR and table extraction through a Streamlit app.
+Converts one-page scanned PDF files into a single Excel workbook using OCR and table extraction, served through a Streamlit UI.
 
-It is designed for scanned technical drawings, parts lists, and similar table-heavy documents where each PDF is a single page image. The app runs on CPU, uses open-source Python tooling, supports a friendly Streamlit UI, and can run either as a hosted Streamlit app or in Docker on a private machine.
+Designed for scanned technical drawings, parts lists, and table-heavy documents where each PDF is a single-page image. Runs entirely on CPU with open-source Python tooling.
+
+> **Deployment note:** This app requires PaddlePaddle and PaddleOCR (~1.5 GB of dependencies) and cannot be hosted on Streamlit Community Cloud. Use Docker on any Linux server, VPS, or local machine instead.
+
+---
 
 ## What It Does
 
-- Supports two input modes:
-  - upload PDFs directly in the Streamlit UI
-  - read all `.pdf` files from an input folder
-- Extracts structured table data from each file
-- Tries multiple image preprocessing variants automatically to improve OCR
-- Saves one Excel workbook with one sheet for all files
-- Writes each file in this layout:
+- Two input modes:
+  - **Upload PDFs** — upload files directly in the browser (session-based)
+  - **Read Folder** — reads all `.pdf` files from a mounted input folder (resumable)
+- Extracts structured table data from each page using `PPStructure`
+- Tries multiple image preprocessing variants automatically to maximize OCR yield
+- Produces one Excel workbook with one sheet — each file gets:
   - row 1: headers
   - row 2: values
   - row 3: blank separator
-- Adds extra columns like `Unstructured_1` when text is found outside the main table
-- Shows sample previews in the Streamlit UI
-- Saves progress and cached records in folder mode so a stopped run can continue later
+- Text found outside tables is captured in `Unstructured_1`, `Unstructured_2`, … columns
+- Shows live previews and progress during extraction
+- Folder mode saves progress so a stopped run can be resumed
+
+---
 
 ## Repository Layout
 
-```text
-.
-|-- app.py
-|-- Dockerfile
-|-- docker-compose.yml
-|-- packages.txt
-|-- requirements.txt
-|-- .streamlit/config.toml
-|-- input_pdfs/
-`-- output_excel/
 ```
+.
+├── app.py
+├── Dockerfile
+├── docker-compose.yml
+├── packages.txt
+├── requirements.txt
+└── .streamlit/
+    └── config.toml
+```
+
+---
+
+## Deployment — Docker (recommended)
+
+### Requirements
+
+- Docker and Docker Compose installed
+- Any Linux server, VPS, or local machine with ~2 GB RAM
+
+### Steps
+
+```bash
+git clone https://github.com/wael-fahmy/pdf-excel
+cd pdf-excel
+mkdir -p input_pdfs output_excel
+docker compose build --no-cache
+docker compose up -d
+```
+
+Open `http://localhost:8501` (or `http://<server-ip>:8501` for a remote server).
+
+### Folder mode workflow
+
+1. Copy your PDF files into `input_pdfs/`
+2. Open the app in the browser
+3. Select **Read Folder** in the sidebar
+4. Keep input path as `/data/input` and output path as `/data/output`
+5. Click **Start Extraction**
+6. Collect `output_excel/Extracted_Data.xlsx` when done
+
+### Upload mode workflow
+
+1. Open the app in the browser
+2. Keep **Upload PDFs** selected
+3. Upload one or more PDF files
+4. Click **Start Extraction**
+5. Download `Extracted_Data.xlsx` from the browser
+
+---
+
+## Hosting Options
+
+Any platform that supports Docker works:
+
+| Platform | Notes |
+|---|---|
+| **VPS (Hetzner, DigitalOcean, etc.)** | `docker compose up -d`, ~$5/month |
+| **Railway** | Connect GitHub repo, select Dockerfile |
+| **Render** | Free tier supports Docker containers |
+| **Fly.io** | `fly launch` from the repo root |
+
+---
 
 ## Output Files
 
-During a run, the app writes:
-
-- `output_excel/Extracted_Data.xlsx`
-- `output_excel/.pdf_cache/progress.json`
-- `output_excel/.pdf_cache/records/*.json`
-- `output_excel/.pdf_cache/samples/*.png`
-
-This means the Excel file and resume state are both saved automatically to disk while the app is running.
-
-## Run Options
-
-### Option 1: Streamlit Deployment
-
-This is the best option when the app will be deployed as a Streamlit app and users should upload files in the browser.
-
-1. Deploy the repo.
-2. Make sure [packages.txt](d:/pdf-excel/packages.txt) is included so Poppler and OCR system libraries are installed.
-3. Open the app in the browser.
-4. Choose `Upload PDFs`.
-5. Upload one or more PDF files.
-6. Click `Start Extraction`.
-7. Download `Extracted_Data.xlsx`.
-
-Notes for hosted Streamlit:
-
-- upload mode is the recommended mode
-- the output file is available for download in the session
-- folder-based resume is mainly intended for Docker/private-server usage
-
-### Option 2: Docker / Private Server
-
-1. Put your PDF files in [input_pdfs](d:/pdf-excel/input_pdfs).
-2. Start the app:
-
-```powershell
-docker compose build --no-cache
-docker compose up
+```
+output_excel/
+├── Extracted_Data.xlsx
+└── .pdf_cache/
+    ├── progress.json
+    ├── records/*.json
+    └── samples/*.png
 ```
 
-3. Open `http://localhost:8501`
-4. In the app choose `Read Folder`
-5. Keep input path as `/data/input`
-6. Keep output path as `/data/output`
-7. Click `Start Extraction`
-8. Get the result from [output_excel](d:/pdf-excel/output_excel) as `Extracted_Data.xlsx`
+The Excel file and resume state are saved automatically to disk after each successful file.
 
-## Resume Behavior
+---
 
-In folder mode, if the app is stopped:
+## Resume Behavior (Folder Mode)
 
-- finished files stay saved in cache
-- the Excel file remains on disk
-- the next run can continue from the last saved point
+If the app is stopped mid-run:
 
-Useful options in the UI for folder mode:
+- Completed files remain in cache
+- The Excel file stays on disk with all successful results so far
+- The next run continues from the last saved point
 
-- `Resume previous run`: keeps existing progress
-- `Retry failed files`: reruns only files that previously failed
-- `Clear Cache`: removes cached progress and starts fresh
+Sidebar options:
 
-If you turn off resume, the app clears the old cache and old Excel file before starting a new run.
+| Option | Effect |
+|---|---|
+| **Resume previous run** | Skips files already marked done or empty |
+| **Retry failed files** | Re-processes files that previously errored |
+| **Clear Cache** | Deletes cached progress and starts fresh |
 
-In upload mode, the app is intentionally session-based and optimized for hosted Streamlit use.
+Turning off Resume clears the old cache and Excel file before starting.
 
-## Expected Input Type
+---
 
-Best results are expected for:
+## Expected Input
 
-- scanned technical tables
-- engineering drawings with parts lists
-- machine-generated text inside table boxes
-- single-page PDF image files
+Best results:
+
+- Scanned technical tables
+- Engineering drawings with parts lists
+- Machine-printed text inside table cells
+- Single-page PDF images at 150 DPI or higher
 
 Harder cases:
 
-- very faint scans
-- rotated pages
-- handwritten notes
-- badly skewed or low-resolution images
+- Very faint or low-contrast scans
+- Handwritten notes
+- Heavily skewed or rotated pages
+- Multi-page PDFs (only the first page is processed)
 
-## OCR Notes
+---
 
-The app uses `paddleocr` with `PPStructure` on CPU only. It tries several versions of the page image:
+## OCR Details
 
-- original image
-- denoised grayscale
-- thresholded high-contrast image
-- sharpened image
+Uses `paddleocr` with `PPStructure` on CPU. For each page the app tries four image variants and keeps the one that yields the most structured data:
 
-It keeps the best extraction result automatically.
+1. Original image
+2. CLAHE-enhanced denoised grayscale
+3. Adaptive threshold (high contrast binary)
+4. Sharpened version of the thresholded image
 
-## Streamlit UI Notes
-
-The UI is built to be friendly for non-technical users:
-
-- upload mode for hosted usage
-- folder mode for server and Docker usage
-- progress metrics during extraction
-- sample previews for extracted records
-- direct Excel download from the browser
-- a clear summary of files that failed
-
-## Deployment Files
-
-- [requirements.txt](d:/pdf-excel/requirements.txt): Python dependencies
-- [packages.txt](d:/pdf-excel/packages.txt): system packages needed by `pdf2image` and OCR on Streamlit deployments
-- [.streamlit/config.toml](d:/pdf-excel/.streamlit/config.toml): Streamlit config including larger upload size and theme colors
-- [docker-compose.yml](d:/pdf-excel/docker-compose.yml): Docker deployment for local/server use
-
-## Docker Notes
-
-The service in [docker-compose.yml](d:/pdf-excel/docker-compose.yml) includes:
-
-- volume mapping for input and output folders
-- automatic restart with `unless-stopped`
-- a healthcheck for the Streamlit app
+---
 
 ## Troubleshooting
 
-### `ImportError: cannot import name 'PPStructure' from 'paddleocr'`
+**`ImportError: cannot import name 'PPStructure' from 'paddleocr'`**
 
-Rebuild the Docker image so the pinned dependencies from [requirements.txt](d:/pdf-excel/requirements.txt) are installed:
+Rebuild the image to reinstall pinned dependencies:
 
-```powershell
+```bash
 docker compose build --no-cache
-docker compose up
+docker compose up -d
 ```
 
-### No PDFs found
+**No PDFs found in folder mode**
 
-In folder mode, make sure your files are inside [input_pdfs](d:/pdf-excel/input_pdfs) and end with `.pdf`.
+Make sure files are inside `input_pdfs/` and have a `.pdf` extension.
 
-### Upload mode on hosted Streamlit is preferred
+**Extraction quality is poor**
 
-If the app is deployed on Streamlit, use `Upload PDFs` instead of `Read Folder` unless the deployment has access to mounted folders.
+- Use higher-resolution scans (200–300 DPI)
+- Crop unnecessary whitespace or borders before input
+- Test with a small batch (`File limit = 5`) first
 
-### Output file not updating
+**Output file not updating**
 
-Check that [output_excel](d:/pdf-excel/output_excel) exists and Docker can write to it.
+Confirm the `output_excel/` folder exists and Docker has write access to it.
 
-### Extraction quality is weak
+---
 
-Try:
+## Notes for Non-Technical Operators
 
-- cleaner scans
-- higher resolution PDFs
-- cropping unnecessary borders before input
-- smaller test batches first
+Normal Docker workflow after initial setup:
 
-## Notes For Hand-Off
+```bash
+docker compose up -d   # start
+docker compose down    # stop
+```
 
-For a non-technical operator, the normal workflow is:
+1. Copy PDFs into `input_pdfs/`
+2. Open the browser UI at `http://localhost:8501`
+3. Click **Start Extraction**
+4. Collect the Excel file from `output_excel/`
 
-1. copy PDFs into the input folder
-2. run Docker
-3. open the browser UI
-4. click one button
-5. collect the Excel file from the output folder
-
-No command-line interaction is needed after startup.
+No command-line interaction is needed beyond starting and stopping the container.
